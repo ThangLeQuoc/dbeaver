@@ -109,7 +109,7 @@ class FilterSettingsDialog extends HelpEnabledDialog {
         {
             Composite columnsGroup = UIUtils.createPlaceholder(tabFolder, 1);
 
-            new FilteredTree(columnsGroup, SWT.SINGLE | SWT.FULL_SELECTION, new NamedObjectPatternFilter(), true, false) {
+            new FilteredTree(columnsGroup, SWT.FULL_SELECTION|SWT.MULTI, new NamedObjectPatternFilter(), true, false) {
                 @Override
                 protected TreeViewer doCreateTreeViewer(Composite parent, int style) {
                     columnsViewer = new TreeViewer(parent, style);
@@ -271,23 +271,33 @@ class FilterSettingsDialog extends HelpEnabledDialog {
                 toolbar.setLayoutData(gd);
                 toolbar.setLayout(new FillLayout());
                 moveTopButton = createToolItem(toolbar, ResultSetMessages.dialog_toolbar_move_to_top, UIIcon.ARROW_TOP, () -> {
-                    int selectionIndex = getSelectionIndex(columnsViewer.getTree());
-                    moveColumns(selectionIndex, 0);
+                    TreeItem[] selection = getSelection(columnsViewer.getTree());
+                    int j = 0;
+                    for (TreeItem treeItem : selection) {
+                        swapColumns(treeItem, j++);
+                    }
                 });
                 moveTopButton.setEnabled(false);
                 moveUpButton = createToolItem(toolbar, ResultSetMessages.dialog_toolbar_move_up, UIIcon.ARROW_UP, () -> {
-                    int selectionIndex = getSelectionIndex(columnsViewer.getTree());
-                    swapColumns(selectionIndex, selectionIndex - 1);
+                    TreeItem[] selection = getSelection(columnsViewer.getTree());
+                    for (TreeItem treeItem : selection) {
+                        swapColumns(treeItem, columnsViewer.getTree().indexOf(treeItem) - 1);
+                    }
                 });
                 moveUpButton.setEnabled(false);
                 moveDownButton = createToolItem(toolbar, ResultSetMessages.dialog_toolbar_move_down, UIIcon.ARROW_DOWN, () -> {
-                    int selectionIndex = getSelectionIndex(columnsViewer.getTree());
-                    swapColumns(selectionIndex, selectionIndex + 1);
+                    TreeItem[] selection = getSelection(columnsViewer.getTree());
+                    for (int i = selection.length - 1; i >= 0; i--) {
+                        swapColumns(selection[i], columnsViewer.getTree().indexOf(selection[i]) + 1);
+                    }
                 });
                 moveDownButton.setEnabled(false);
                 moveBottomButton = createToolItem(toolbar, ResultSetMessages.dialog_toolbar_move_to_bottom, UIIcon.ARROW_BOTTOM, () -> {
-                    int selectionIndex = getSelectionIndex(columnsViewer.getTree());
-                    moveColumns(selectionIndex, getItemsCount() - 1);
+                    TreeItem[] selection = getSelection(columnsViewer.getTree());
+                    int j = 0;
+                    for (int i = selection.length - 1; i >= 0; i--) {
+                        swapColumns(selection[i], getItemsCount() - 1 - j++);
+                    }
                 });
                 moveBottomButton.setEnabled(false);
                 UIUtils.createToolBarSeparator(toolbar, SWT.VERTICAL);
@@ -322,13 +332,24 @@ class FilterSettingsDialog extends HelpEnabledDialog {
                     orderText.setText(""); //$NON-NLS-1$
                     whereText.setText(""); //$NON-NLS-1$
                 });
-
                 columnsViewer.addSelectionChangedListener(event -> {
-                    int selectionIndex = getSelectionIndex(columnsViewer.getTree());
-                    moveTopButton.setEnabled(selectionIndex > 0);
-                    moveUpButton.setEnabled(selectionIndex > 0);
-                    moveDownButton.setEnabled(selectionIndex >= 0 && selectionIndex < getItemsCount() - 1);
-                    moveBottomButton.setEnabled(selectionIndex >= 0 && selectionIndex < getItemsCount() - 1);
+                    TreeItem[] selection = getSelection(columnsViewer.getTree());
+                    boolean lastElementSelected = false;
+                    if (selection.length != 0) {
+                        for (TreeItem treeItem : selection) {
+                            int selectionIndex = columnsViewer.getTree().indexOf(treeItem);
+                            if (selectionIndex >= getItemsCount() - 1) {
+                                lastElementSelected = true;
+                            }
+                            ;
+                        }
+                        moveDownButton.setEnabled(!lastElementSelected);
+                        moveBottomButton.setEnabled(!lastElementSelected);
+                    }
+                    else{
+                        moveDownButton.setEnabled(false);
+                        moveBottomButton.setEnabled(false);
+                    }
                 });
 
             }
@@ -368,17 +389,17 @@ class FilterSettingsDialog extends HelpEnabledDialog {
         columnsViewer.expandAll();
     }
 
-    private int getSelectionIndex(Tree tree) {
+    private TreeItem[] getSelection(Tree tree) {
         final TreeItem[] selection = tree.getSelection();
         if (selection.length == 0) {
-            return 0;
+            return null;
         }
-        return tree.indexOf(selection[0]);
+        return selection;
     }
 
-    private void swapColumns(int curIndex, int newIndex)
+    private void swapColumns(TreeItem curItem, int newIndex)
     {
-        final DBDAttributeConstraint c1 = getBindingConstraint((DBDAttributeBinding) columnsViewer.getTree().getItem(curIndex).getData());
+        final DBDAttributeConstraint c1 = getBindingConstraint((DBDAttributeBinding) curItem.getData());
         final DBDAttributeConstraint c2 = getBindingConstraint((DBDAttributeBinding) columnsViewer.getTree().getItem(newIndex).getData());
         final int vp2 = c2.getVisualPosition();
         c2.setVisualPosition(c1.getVisualPosition());
